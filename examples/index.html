@@ -19,7 +19,7 @@
                          redraw(freq);
                      })
                      def.resolve();
-                 },100);
+                 },500);
 
                  return def;
               }
@@ -53,6 +53,16 @@
               line.next().append($("<div class='block'>"+ (count.length +1) +"</div>"))
           };
           fr.run();
+          fr.addEvent("waiting", function() {
+              $("#state").text("waiting");
+          });
+          fr.addEvent("working", function() {
+                $("#state").text("working");
+          });
+
+          setTimeout(function() {
+             fr.setFrequency(7000);
+          }, 20000);
         }
     </script>
     <style>
@@ -78,6 +88,7 @@
     </style>
 </head>
 <body>
+   <div id="state"></div>
    <div id="demo">
 
    </div>
