@@ -1,9 +1,85 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title></title>
+    <title>Frequencer Example</title>
+
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/2.0.0/jquery.min.js"></script>
+    <script src="../frequencer.js"></script>
+    <script>
+        window.onload = function(e){
+          //console.log("load", frequencer, $);
+          var fr = frequencer({
+              frequency : [10000,3000, 15000],
+              action:  function(frequencies) {
+                 var def = $.Deferred();
+
+                 setTimeout(function() {
+                     console.log("here");
+                     frequencies.forEach(function (freq) {
+                         redraw(freq);
+                     })
+                     def.resolve();
+                 },100);
+
+                 return def;
+              }
+
+          });
+
+          var draw = function(frs, counters) {
+
+              Object.keys(frs).forEach(function(f) {
+                  var counterVisualisation = "<div class='cv'>";
+                  for (var i= frs[f]; i--; ) {
+                      counterVisualisation += "<div class='block'>"+ (frs[f] - i) +"</div>";
+                  }
+                  counterVisualisation +="</div>";
+                  counterVisualisation +="<div class='cb'></div>";
+                  $("#demo").append($("<div id = 'freq_"+ f +"' class='freq'> "+ f +": </div>" + counterVisualisation));
+              });
+          };
+         // draw( {10000:3,3000:10, 15000:2});
+
+          var redraw = function(freq) {
+               var line = $("#demo").find("#freq_" +freq),
+                   count;
+               if (!line.length) {
+                   line =  $("<div id = 'freq_"+ freq +"' class='freq'> "+ freq +": </div>");
+                   $("#demo").append(line);
+                   $("#demo").append($("<div class='cv'></div><div class='cb'></div>"));
+
+               }
+              count = line.next().find('.block');
+              line.next().append($("<div class='block'>"+ (count.length +1) +"</div>"))
+          };
+          fr.run();
+        }
+    </script>
+    <style>
+        .freq {
+            width: 200px;
+            background: gray;
+            float: left;
+        }
+        .block {
+            width: 20px;
+            background: red;
+            height: 20px;
+            float: left;
+            margin: 2px;
+        }
+        .cv {
+            width: 100%;
+        }
+        .cb {
+            clear: both;
+            height: 20px;
+        }
+    </style>
 </head>
 <body>
+   <div id="demo">
 
+   </div>
 </body>
 </html>
