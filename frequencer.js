@@ -1,106 +1,131 @@
 /**
  * Created by User on 5/19/14.
  */
-
-console.log("frequencer here");
-
 var frequencer = function(config) {
-       var timerId,
-           lastActionTime = Date.now(),
-           cache = {},
-           eventHandlers = {},
-           isPromise = function (value) {
-                return !!value && typeof value === 'object' && value.hasOwnProperty('done') && value.hasOwnProperty('fail');
-           },
-           action = config.action,
-           frequencies = Array.isArray(config.frequency)? config.frequency: [config.frequency],
-           getFrequency = function () {
-               return Math.min.apply(null, frequencies);
-           },
-           step = function(immediate) {
-               var result;
-               lastActionTime = Date.now(),
-               frequency = immediate?0 :getFrequency(),
-               activeFreq = [];
+        var timerId,
+            currentTimer,
+            cache = {},
+            action = config.action,
+            onSuccess =  config.onSuccess,
+            onError = config.onError,
+            isPromise = function (value) {
+              return !!value && typeof value === 'object' && value.hasOwnProperty('done') && value.hasOwnProperty('fail');
+            },
+            frequencies = Array.isArray(config.frequency)? config.frequency: [config.frequency],
+            getMin = function(arr) {
+                return Math.min.apply(null, arr);
+            },
+            getFrequency = function () {
+                return getMin(frequencies);
+            },
+            shouldDoSomethingNow = function(timer) {
+                var timerId = timer && timer.id,
+                    currentTimerId = currentTimer && currentTimer.id;
 
-               frequencies.forEach(function(freq) {
-                    if (cache[freq]) {
-                      if ((Date.now() - cache[freq])> freq) {
-                          cache[freq] = Date.now();
-                          activeFreq.push(freq);
-                      }
-                    }else {
-                      // first run for this value
-                      cache[freq] = Date.now();
-                      activeFreq.push(freq);
+                if (currentTimer && (timerId === currentTimerId)) {
+                    // it was called by previous iteration
+                    activeTask = null;
+                    return true;
+                } else {
+                    if (!timerId) {
+                        //  external call
+                        if (isWorking()) {
+                            return false; // when active call will be done , new step will triggered
+                        } else {
+                            if (currentTimerId) { // task is not run yet
+                                clearTimeout(currentTimerId);
+                                currentTimer = null;
+                            }
+                            return true;
+                        }
+
                     }
-               });
-               fireEvent("waiting");
-               timerId = setTimeout(function() {
-                  fireEvent("working");
-                  result = action(activeFreq); ///  pass frequency array here
-                  if (isPromise(result)){
-                     result.done(step);
-                  } else {
-                     step();
-                  }
-               }, frequency);
-           },
-           fireEvent = function(eventName) {
-               if (eventHandlers.hasOwnProperty(eventName)){
-                   eventHandlers[eventName].forEach(function(callback) {
-                       callback();
-                   })
-               }
-           };
+                }
+            },
+            timeBeforeStart =  function() {
+                if (isWaiting()) {
+                    return currentTimer.frequency - (Date.now() - currentTimer.time);
+                } else {
+                    return null;
+                }
+            },
+            isWaiting =  function() {
+                return currentTimer && (!activeTask || activeTask.state() !== "pending");
+            },
+            isWorking = function() {
+                return activeTask && activeTask.state() === "pending";
+            },
+            isStopped = function() {
+                return !currentTimer && (!activeTask || activeTask.state() !== "pending");
+            },
+            collectActiveFrequencies =  function() {
+                var activeFreq = [];
+                frequencies.forEach(function(freq) {
+                    if (cache[freq]) {
+                        if ((Date.now() - cache[freq])> freq) {
+                            cache[freq] = Date.now();
+                            activeFreq.push(freq);
+                        }
+                    }else {
+                        cache[freq] = Date.now();
+                        activeFreq.push(freq);
+                    }
+                });
+                return activeFreq;
+            },
+            activeTask,
+            iteration = function(timerId) {
+               var frequency,
+                   result,
+                   activeFreq;
+               if (shouldDoSomethingNow(timerId)) {
+                   frequency = timerId ? getFrequency() : 0;
+                   // set timeout for new cycle
+                   currentTimer = {};
+                   currentTimer.frequency = frequency;
+                   currentTimer.time = Date.now();
+                   currentTimer.id = setTimeout(function() {
+                       activeFreq = collectActiveFrequencies();
+                       if (!activeFreq.length) {
+                           iteration(currentTimer);
+                       } else {
+                           result = action(activeFreq); ///  pass frequency array here
 
-
-    return {
-       run : function() {
-           console.log("ran");
-           step(true);
-       },
-       setFrequency: function(frequency, immediate) {
-           if (frequencies.indexOf(frequency) <0 ) {
-               frequencies.push(frequency);
-               if (immediate) {
-                   clearTimeout(timerId);
-                   step(true);
-               }
-           }
-       },
-       stop : function () {
-           clearTimeout(timerId);
-       },
-       addEvent : function(eventName, callback) {
-           //waiting
-           //working
-           if (eventHandlers.hasOwnProperty(eventName)){
-               eventHandlers[eventName].push(callback);
-           } else {
-               eventHandlers[eventName] = [callback];
-           }
-       },
-       removeEvent : function(eventName, callback) {
-           var i, currentEvent;
-           if (eventHandlers.hasOwnProperty(eventName)){
-               currentEvent = eventHandlers[eventName];
-               if (callback){
-                   for (i = 0; i < currentEvent.length; i++){
-                       if (currentEvent[i] === callback){
-                           currentEvent.splice(i, 1);
-                           break;
+                           if (isPromise(result)){
+                               activeTask = result;
+                               result.done(function (data) {
+                                        onSuccess ? onSuccess(data) && iteration(currentTimer) : iteration(currentTimer);
+                                   }).fail(function (error) {
+                                        onError ? onError(error) && iteration(currentTimer) : iteration(currentTimer);
+                                   });
+                           } else {
+                               onSuccess && onSuccess(result) && iteration(currentTimer);
+                           }
                        }
-                   }
+                   }, frequency);
                } else {
-                   currentEvent.length = 0;
-                   delete eventHandlers[eventName];
-               }
-           }
-       },
-       getFrequncies: function() {
-           return frequencies;
-       }
 
-    }
-};
+               }
+            };
+
+        return {
+            run : function() {
+                cache = {};
+                iteration(null);
+            },
+            setFrequencies: function(newFrequencies) {
+                var curMinFreq = getMin(frequencies),
+                    newCurMinFreq = getMin(newFrequencies);
+
+                frequencies = newFrequencies;
+                if (isWaiting()) {
+                    if (newCurMinFreq < curMinFreq && timeBeforeStart() > newCurMinFreq){
+                        iteration(null);
+                    }
+                }
+            },
+            stop : function () {
+                clearTimeout(timerId);
+            }
+        }
+    };

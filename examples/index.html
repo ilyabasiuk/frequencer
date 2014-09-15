@@ -53,12 +53,6 @@
               line.next().append($("<div class='block'>"+ (count.length +1) +"</div>"))
           };
           fr.run();
-          fr.addEvent("waiting", function() {
-              $("#state").text("waiting");
-          });
-          fr.addEvent("working", function() {
-                $("#state").text("working");
-          });
 
           setTimeout(function() {
              fr.setFrequency(7000);
